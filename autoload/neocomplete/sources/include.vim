@@ -76,6 +76,13 @@ function! s:source.gather_candidates(context) "{{{
     return []
   endif
 
+  let filetype = neocomplete#get_context_filetype()
+
+  if filetype ==# 'cs'
+      " SFV: For some reason this source is really annoying in CS files
+      return []
+  endif
+
   if !has_key(s:include_info, bufnr('%'))
     " Make cache automatically.
     call s:check_buffer('', 0)
