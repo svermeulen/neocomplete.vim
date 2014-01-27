@@ -1,7 +1,7 @@
 "=============================================================================
-" FILE: matcher_head.vim
+" FILE: converter_disable_abbr.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 05 Jan 2014.
+" Last Modified: 15 Jan 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -27,44 +27,19 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
-function! neocomplete#filters#matcher_head#define() "{{{
-  return s:matcher
+function! neocomplete#filters#converter_disable_abbr#define() "{{{
+  return s:converter
 endfunction"}}}
 
-let s:matcher = {
-      \ 'name' : 'matcher_head',
-      \ 'description' : 'head matcher',
+let s:converter = {
+      \ 'name' : 'converter_disable_abbr',
+      \ 'description' : 'disable abbr converter',
       \}
 
-function! s:matcher.filter(context) "{{{
-  let pattern = '^' . neocomplete#filters#escape(
-        \ a:context.complete_str)
-
-  lua << EOF
-do
-  local pattern = vim.eval('pattern')
-  local input = vim.eval('a:context.complete_str')
-  local candidates = vim.eval('a:context.candidates')
-  if vim.eval('&ignorecase') ~= 0 then
-    pattern = string.lower(pattern)
-    for i = #candidates-1, 0, -1 do
-      local word = vim.type(candidates[i]) == 'dict' and
-      string.lower(candidates[i].word) or string.lower(candidates[i])
-      if string.find(word, pattern, 1) == nil then
-        candidates[i] = nil
-      end
-    end
-  else
-    for i = #candidates-1, 0, -1 do
-      local word = vim.type(candidates[i]) == 'dict' and
-      candidates[i].word or candidates[i]
-      if string.find(word, pattern, 1) == nil then
-        candidates[i] = nil
-      end
-    end
-  end
-end
-EOF
+function! s:converter.filter(context) "{{{
+  for candidate in a:context.candidates
+    let candidate.abbr = candidate.word
+  endfor
 
   return a:context.candidates
 endfunction"}}}

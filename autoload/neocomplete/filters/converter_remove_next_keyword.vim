@@ -1,7 +1,7 @@
 "=============================================================================
 " FILE: converter_remove_next_keyword.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 01 Jan 2014.
+" Last Modified: 23 Jan 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -28,64 +28,9 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 function! neocomplete#filters#converter_remove_next_keyword#define() "{{{
-  return s:converter
-endfunction"}}}
-
-let s:converter = {
-      \ 'name' : 'converter_remove_next_keyword',
-      \ 'description' : 'remove next keyword converter',
-      \}
-
-function! s:converter.filter(context) "{{{
-  " Remove next keyword.
-  let next_keyword = neocomplete#filters#
-        \converter_remove_next_keyword#get_next_keyword(a:context.source_name)
-  if next_keyword == ''
-    return a:context.candidates
-  endif
-
-  let next_keyword = substitute(
-        \ substitute(escape(next_keyword,
-        \ '~" \.^$*[]'), "'", "''", 'g'), ')$', '', '').'$'
-
-  " No ignorecase.
-  let ignorecase_save = &ignorecase
-  let &ignorecase = 0
-  try
-    let candidates = filter(copy(a:context.candidates),
-          \ 'v:val.word =~# next_keyword')
-
-    for r in candidates
-      if !has_key(r, 'abbr')
-        let r.abbr = r.word
-      endif
-      let r.word = r.word[: match(r.word, next_keyword)-1]
-    endfor
-
-    if neocomplete#is_auto_complete()
-      let a:context.candidates = candidates
-    endif
-
-    let a:context.candidates = filter(a:context.candidates,
-          \ 'v:val.word !=# a:context.complete_str')
-  finally
-    let &ignorecase = ignorecase_save
-  endtry
-
-  return a:context.candidates
-endfunction"}}}
-
-function! neocomplete#filters#converter_remove_next_keyword#get_next_keyword(source_name) "{{{
-  let pattern = '^\%(' .
-        \ ((a:source_name ==# 'file' || a:source_name ==# 'file/include') ?
-        \   neocomplete#get_next_keyword_pattern(
-        \             'filename', a:source_name) :
-        \   neocomplete#get_next_keyword_pattern(
-        \             neocomplete#get_context_filetype(), a:source_name)) . '\m\)'
-
-  let next_keyword = matchstr('a'.
-        \ getline('.')[len(neocomplete#get_cur_text(1))+1 :], pattern)[1:]
-  return next_keyword
+  let source = deepcopy(neocomplete#filters#converter_remove_overlap#define())
+  let source.name = 'converter_remove_next_keyword'
+  return source
 endfunction"}}}
 
 let &cpo = s:save_cpo

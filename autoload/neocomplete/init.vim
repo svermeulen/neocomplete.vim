@@ -1,7 +1,7 @@
 "=============================================================================
 " FILE: init.vim
 " AUTHOR: Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 02 Jan 2014.
+" Last Modified: 22 Jan 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -36,6 +36,7 @@ function! neocomplete#init#enable() "{{{
     return
   endif
 
+  call neocomplete#init#_current_neocomplete()
   call neocomplete#init#_autocmds()
   call neocomplete#init#_others()
 
@@ -49,9 +50,7 @@ endfunction"}}}
 
 function! neocomplete#init#disable() "{{{
   if !neocomplete#is_enabled()
-    call neocomplete#print_warning(
-          \ 'neocomplete is disabled! This command is ignored.')
-    return
+    call neocomplete#init#enable()
   endif
 
   let s:is_enabled = 0
@@ -365,28 +364,6 @@ function! neocomplete#init#_variables() "{{{
         \'\h\w*')
   "}}}
 
-  " Initialize next keyword patterns. "{{{
-  call neocomplete#util#set_default_dictionary(
-        \'g:neocomplete#next_keyword_patterns',
-        \'python,go,cs,java,lua,zimbu,php',
-        \'\w*()\?')
-  call neocomplete#util#set_default_dictionary(
-        \'g:neocomplete#next_keyword_patterns', 'perl',
-        \'\w*()\?\|\h\w*>')
-  call neocomplete#util#set_default_dictionary(
-        \'g:neocomplete#next_keyword_patterns', 'perl6',
-        \'\w*()\?\|\h\w*>')
-  call neocomplete#util#set_default_dictionary(
-        \'g:neocomplete#next_keyword_patterns', 'vim,help',
-        \'\w*()\?\|\w*:\]\|[[:alnum:]_-]*[)>=]')
-  call neocomplete#util#set_default_dictionary(
-        \'g:neocomplete#next_keyword_patterns', 'tex',
-        \'[[:alnum:]:_]\+[*[{}]')
-  call neocomplete#util#set_default_dictionary(
-        \'g:neocomplete#next_keyword_patterns', 'html,xhtml,xml,mkd',
-        \'[^"]*"\|[[:alnum:]_:-]*>')
-  "}}}
-
   " Initialize same file types. "{{{
   call neocomplete#util#set_default_dictionary(
         \ 'g:neocomplete#same_filetypes',
@@ -629,6 +606,7 @@ function! neocomplete#init#_current_neocomplete() "{{{
         \ 'linenr' : 0,
         \ 'completeopt' : &completeopt,
         \ 'completed_item' : {},
+        \ 'overlapped_items' : {},
         \ 'sources' : [],
         \ 'sources_filetype' : '',
         \ 'within_comment' : 0,
@@ -691,17 +669,18 @@ function! neocomplete#init#_source(source) "{{{
         \ 'disabled_filetypes' : {},
         \ 'hooks' : {},
         \ 'mark' : '',
-        \ 'matchers' : g:neocomplete#enable_fuzzy_completion ?
-        \        ['matcher_fuzzy'] : ['matcher_head'],
+        \ 'matchers' :
+        \        (g:neocomplete#enable_fuzzy_completion ?
+        \          ['matcher_fuzzy'] : ['matcher_head'])
+        \      + ['matcher_length'],
         \ 'sorters' : ['sorter_rank'],
         \ 'converters' : [
-        \      'converter_remove_next_keyword',
+        \      'converter_remove_overlap',
         \      'converter_delimiter',
         \      'converter_case',
         \      'converter_abbr',
         \ ],
-        \ 'keyword_patterns' : {},
-        \ 'next_keyword_patterns' : {},
+        \ 'keyword_patterns' : g:neocomplete#keyword_patterns,
         \ 'neocomplete__context' : neocomplete#init#_context({}),
         \ }
 
@@ -734,12 +713,6 @@ function! neocomplete#init#_source(source) "{{{
     let source.min_pattern_length = (source.kind ==# 'keyword') ?
           \ g:neocomplete#auto_completion_start_length : 0
   endif
-
-  " Merge default patterns.
-  call extend(source.keyword_patterns,
-        \ g:neocomplete#keyword_patterns, 'keep')
-  call extend(source.next_keyword_patterns,
-        \ g:neocomplete#next_keyword_patterns, 'keep')
 
   let source.neocomplete__matchers = neocomplete#init#_filters(
         \ neocomplete#util#convert2list(source.matchers))

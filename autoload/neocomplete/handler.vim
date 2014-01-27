@@ -1,7 +1,7 @@
 "=============================================================================
 " FILE: handler.vim
 " AUTHOR: Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 31 Dec 2013.
+" Last Modified: 26 Jan 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -59,6 +59,7 @@ function! neocomplete#handler#_on_insert_leave() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
   let neocomplete.cur_text = ''
   let neocomplete.completed_item = {}
+  let neocomplete.overlapped_items = {}
 endfunction"}}}
 function! neocomplete#handler#_on_write_post() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
@@ -87,14 +88,19 @@ function! neocomplete#handler#_on_complete_done() "{{{
     endif
 
     let complete_str = v:completed_item.word
+    if complete_str == ''
+      return
+    endif
+
     if (v:completed_item.abbr != ''
           \ && len(v:completed_item.word) < len(v:completed_item.abbr))
           \ || v:completed_item.info != ''
       let neocomplete.completed_item = v:completed_item
     endif
   else
-    let complete_str = matchstr(neocomplete#get_cur_text(1),
-          \ '\%('.neocomplete#get_next_keyword_pattern().'\m\)$')
+    let [_, complete_str] =
+          \ neocomplete#helper#match_word(
+          \   matchstr(getline('.'), '^.*\%'.col('.').'c'))
     if complete_str == ''
       return
     endif
@@ -107,6 +113,15 @@ function! neocomplete#handler#_on_complete_done() "{{{
     if !empty(candidates)
       let neocomplete.completed_item = candidates[0]
     endif
+  endif
+
+  " Restore overlapped item
+  if has_key(neocomplete.overlapped_items, complete_str)
+    " Move cursor
+    call cursor(0, col('.') - len(complete_str) +
+          \ len(neocomplete.overlapped_items[complete_str]))
+
+    let complete_str = neocomplete.overlapped_items[complete_str]
   endif
 
   let frequencies = neocomplete#variables#get_frequencies()
@@ -176,7 +191,7 @@ function! neocomplete#handler#_do_auto_complete(event) "{{{
   let neocomplete.old_linenr = line('.')
 
   if neocomplete#helper#is_omni(cur_text)
-    call feedkeys("\<C-x>\<C-o>\<C-p>", 'n')
+    call feedkeys("\<Plug>(neocomplete_start_omni_complete)")
     return
   endif
 
