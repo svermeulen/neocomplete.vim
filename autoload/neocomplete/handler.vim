@@ -1,7 +1,6 @@
 "=============================================================================
 " FILE: handler.vim
 " AUTHOR: Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 29 Jan 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -55,6 +54,7 @@ function! neocomplete#handler#_on_insert_leave() "{{{
   call neocomplete#helper#clear_result()
 
   call s:close_preview_window()
+  call s:make_cache_current_line()
 
   let neocomplete = neocomplete#get_current_neocomplete()
   let neocomplete.cur_text = ''
@@ -62,8 +62,6 @@ function! neocomplete#handler#_on_insert_leave() "{{{
   let neocomplete.overlapped_items = {}
 endfunction"}}}
 function! neocomplete#handler#_on_write_post() "{{{
-  let neocomplete = neocomplete#get_current_neocomplete()
-
   " Restore foldinfo.
   for winnr in filter(range(1, winnr('$')),
         \ "!empty(getwinvar(v:val, 'neocomplete_foldinfo'))")
@@ -77,6 +75,7 @@ function! neocomplete#handler#_on_write_post() "{{{
           \ 'neocomplete_foldinfo', {})
   endfor
 endfunction"}}}
+" @vimlint(EVL102, 1, v:completed_item)
 function! neocomplete#handler#_on_complete_done() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
 
@@ -98,9 +97,9 @@ function! neocomplete#handler#_on_complete_done() "{{{
       let neocomplete.completed_item = v:completed_item
     endif
   else
-    let [_, complete_str] =
+    let complete_str =
           \ neocomplete#helper#match_word(
-          \   matchstr(getline('.'), '^.*\%'.col('.').'c'))
+          \   matchstr(getline('.'), '^.*\%'.col('.').'c'))[1]
     if complete_str == ''
       return
     endif
@@ -131,7 +130,16 @@ function! neocomplete#handler#_on_complete_done() "{{{
   else
     let frequencies[complete_str] += 20
   endif
+
+  " indent line matched by indentkeys
+  for word in filter(map(split(&l:indentkeys, ','),
+        \ "matchstr(v:val, '.*=\\zs.*')"), "v:val != ''")
+    if stridx(complete_str, word) == 0
+      call neocomplete#helper#indent_current_line()
+    endif
+  endfor
 endfunction"}}}
+" @vimlint(EVL102, 0, v:completed_item)
 function! neocomplete#handler#_change_update_time() "{{{
   if &updatetime > g:neocomplete#cursor_hold_i_time
     " Change updatetime.
@@ -147,6 +155,18 @@ function! neocomplete#handler#_restore_update_time() "{{{
     let &updatetime = neocomplete.update_time_save
   endif
 endfunction"}}}
+function! neocomplete#handler#_on_insert_char_pre() "{{{
+  if neocomplete#is_locked()
+    return
+  endif
+
+  let neocomplete = neocomplete#get_current_neocomplete()
+  if neocomplete.old_char != ' ' && v:char == ' '
+    call s:make_cache_current_line()
+  endif
+
+  let neocomplete.old_char = v:char
+endfunction"}}}
 
 function! neocomplete#handler#_do_auto_complete(event) "{{{
   if s:check_in_do_auto_complete()
@@ -159,62 +179,50 @@ function! neocomplete#handler#_do_auto_complete(event) "{{{
 
   let cur_text = neocomplete#get_cur_text(1)
 
-  if g:neocomplete#enable_debug
-    echomsg 'cur_text = ' . cur_text
-  endif
+  call neocomplete#print_debug('cur_text = ' . cur_text)
 
-  " Prevent infinity loop.
-  if s:is_skip_auto_complete(cur_text)
+  try
+    " Prevent infinity loop.
+    if s:is_skip_auto_complete(cur_text)
+      call neocomplete#print_debug('Skipped.')
+      return
+    endif
+
+    if neocomplete#helper#is_omni(cur_text)
+          \ && neocomplete.old_cur_text !=# cur_text
+      call feedkeys("\<Plug>(neocomplete_start_omni_complete)")
+      return
+    endif
+
+    " Check multibyte input or eskk.
+    if neocomplete#is_eskk_enabled()
+          \ || neocomplete#is_multibyte_input(cur_text)
+      call neocomplete#print_debug('Skipped.')
+      return
+    endif
+
+    " Check complete position.
+    let complete_sources = neocomplete#complete#_set_results_pos(cur_text)
+    if empty(complete_sources)
+      call neocomplete#print_debug('Skipped.')
+      return
+    endif
+
+    " Check previous position
+    let complete_pos = neocomplete#complete#_get_complete_pos(complete_sources)
+    if neocomplete.skip_next_complete
+          \ && complete_pos == neocomplete.old_complete_pos
+          \ && stridx(cur_text, neocomplete.old_cur_text) == 0
+      " Same position.
+      return
+    endif
+  finally
     let neocomplete.old_cur_text = cur_text
     let neocomplete.old_linenr = line('.')
+  endtry
 
-    if cur_text =~ '^\s*$\|\s\+$'
-      " Make cache.
-      if neocomplete#helper#is_enabled_source('buffer',
-            \ neocomplete.context_filetype)
-        " Caching current cache line.
-        call neocomplete#sources#buffer#make_cache_current_line()
-      endif
-      if neocomplete#helper#is_enabled_source('member',
-            \ neocomplete.context_filetype)
-        " Caching current cache line.
-        call neocomplete#sources#member#make_cache_current_line()
-      endif
-    endif
-
-    if g:neocomplete#enable_debug
-      echomsg 'Skipped.'
-    endif
-    return
-  endif
-
-  let neocomplete.old_cur_text = cur_text
-  let neocomplete.old_linenr = line('.')
-
-  if neocomplete#helper#is_omni(cur_text)
-    call feedkeys("\<Plug>(neocomplete_start_omni_complete)")
-    return
-  endif
-
-  " Check multibyte input or eskk.
-  if neocomplete#is_eskk_enabled()
-        \ || neocomplete#is_multibyte_input(cur_text)
-    if g:neocomplete#enable_debug
-      echomsg 'Skipped.'
-    endif
-
-    return
-  endif
-
-  " Check complete position.
-  let complete_sources = neocomplete#complete#_set_results_pos(cur_text)
-  if empty(complete_sources)
-    if g:neocomplete#enable_debug
-      echomsg 'Skipped.'
-    endif
-
-    return
-  endif
+  let neocomplete.skip_next_complete = 0
+  let neocomplete.old_complete_pos = complete_pos
 
   let &l:completefunc = 'neocomplete#complete#auto_complete'
 
@@ -224,9 +232,7 @@ function! neocomplete#handler#_do_auto_complete(event) "{{{
           \ neocomplete#complete#_get_results(cur_text)
 
     if empty(neocomplete.complete_sources)
-      if g:neocomplete#enable_debug
-        echomsg 'Skipped.'
-      endif
+      call neocomplete#print_debug('Skipped.')
       return
     endif
   endif
@@ -247,6 +253,12 @@ function! neocomplete#handler#_do_auto_complete(event) "{{{
     else
       set completeopt+=noinsert,noselect
     endif
+  endif
+
+  " Do not display completion messages
+  " Patch: https://groups.google.com/forum/#!topic/vim_dev/WeBBjkXE8H8
+  if has('patch-7.4.314')
+    set shortmess+=c
   endif
 
   " Start auto complete.
@@ -318,8 +330,9 @@ function! s:is_skip_auto_complete(cur_text) "{{{
         \ || (a:cur_text == neocomplete.old_cur_text
         \     && line('.') == neocomplete.old_linenr)
         \ || (g:neocomplete#lock_iminsert && &l:iminsert)
-        \ || (&l:formatoptions =~# '[tc]' && &l:textwidth > 0
+        \ || (&l:formatoptions =~# '[tca]' && &l:textwidth > 0
         \     && neocomplete#util#wcswidth(a:cur_text) >= &l:textwidth)
+    let neocomplete.skip_next_complete = 0
     return 1
   endif
 
@@ -331,9 +344,10 @@ function! s:is_skip_auto_complete(cur_text) "{{{
   let is_delimiter = 0
   let filetype = neocomplete#get_context_filetype()
 
-  for delimiter in ['/', '\.'] +
+  for delimiter in ['/', '.'] +
         \ get(g:neocomplete#delimiter_patterns, filetype, [])
-    if a:cur_text =~ delimiter . '$'
+    if stridx(a:cur_text, delimiter,
+          \ len(a:cur_text) - len(delimiter)) >= 0
       let is_delimiter = 1
       break
     endif
@@ -341,19 +355,30 @@ function! s:is_skip_auto_complete(cur_text) "{{{
 
   if is_delimiter && neocomplete.skip_next_complete == 2
     let neocomplete.skip_next_complete = 0
-    return 0
   endif
 
-  let neocomplete.skip_next_complete = 0
-
-  return 1
+  return 0
 endfunction"}}}
 function! s:close_preview_window() "{{{
-  if g:neocomplete#enable_auto_close_preview &&
-        \ bufname('%') !=# '[Command Line]' &&
-        \ winnr('$') != 1 && !&l:previewwindow
+  if g:neocomplete#enable_auto_close_preview
+        \ && bufname('%') !=# '[Command Line]'
+        \ && winnr('$') != 1 && !&l:previewwindow
+        \ && !s:check_in_do_auto_complete()
     " Close preview window.
     pclose!
+  endif
+endfunction"}}}
+function! s:make_cache_current_line() "{{{
+  let neocomplete = neocomplete#get_current_neocomplete()
+  if neocomplete#helper#is_enabled_source('buffer',
+        \ neocomplete.context_filetype)
+    " Caching current cache line.
+    call neocomplete#sources#buffer#make_cache_current_line()
+  endif
+  if neocomplete#helper#is_enabled_source('member',
+        \ neocomplete.context_filetype)
+    " Caching current cache line.
+    call neocomplete#sources#member#make_cache_current_line()
   endif
 endfunction"}}}
 

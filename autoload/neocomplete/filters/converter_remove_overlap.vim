@@ -1,7 +1,6 @@
 "=============================================================================
 " FILE: converter_overlap.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 15 Feb 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -82,9 +81,11 @@ function! neocomplete#filters#converter_remove_overlap#length(left, right) "{{{
     return 0
   endif
 
+  let ret = 0
+
   lua << EOF
 do
-  local ret = 0
+  local ret = vim.eval('ret')
   local left = vim.eval('a:left')
   local right = vim.eval('a:right')
   local left_len = string.len(left)

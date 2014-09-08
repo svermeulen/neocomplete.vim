@@ -1,7 +1,6 @@
 "=============================================================================
 " FILE: helper.vim
 " AUTHOR: Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 15 Feb 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -49,8 +48,6 @@ function! neocomplete#helper#get_cur_text(...) "{{{
   if neocomplete.event ==# 'InsertCharPre'
     let complete_str .= v:char
   endif
-
-  let filetype = neocomplete#get_context_filetype()
 
   let neocomplete.cur_text = cur_text . complete_str
 
@@ -102,15 +99,15 @@ function! neocomplete#helper#is_enabled_source(source, filetype) "{{{
         \ : a:source
 
   return !empty(source) && (empty(source.filetypes) ||
-        \     get(source.filetypes, a:filetype, 0))
+        \     !empty(neocomplete#helper#ftdictionary2list(
+        \      source.filetypes, a:filetype)))
         \  && (!get(source.disabled_filetypes, '_', 0) &&
-        \      !get(source.disabled_filetypes, a:filetype, 0))
+        \      empty(neocomplete#helper#ftdictionary2list(
+        \      source.disabled_filetypes, a:filetype)))
 endfunction"}}}
 
 function! neocomplete#helper#get_source_filetypes(filetype) "{{{
   let filetype = (a:filetype == '') ? 'nothing' : a:filetype
-
-  let filetype_dict = {}
 
   let filetypes = [filetype]
   if filetype =~ '\.'
@@ -150,10 +147,7 @@ function! neocomplete#helper#complete_check() "{{{
     let neocomplete = neocomplete#get_current_neocomplete()
     let neocomplete.skipped = 1
 
-    if g:neocomplete#enable_debug
-      redraw
-      echomsg 'Skipped.'
-    endif
+    call neocomplete#print_debug('Skipped.')
   endif
 
   return ret
@@ -240,14 +234,8 @@ EOF
 endfunction"}}}
 
 function! neocomplete#helper#ftdictionary2list(dictionary, filetype) "{{{
-  let list = []
-  for filetype in neocomplete#get_source_filetypes(a:filetype)
-    if has_key(a:dictionary, filetype)
-      call add(list, a:dictionary[filetype])
-    endif
-  endfor
-
-  return list
+  return map(filter(neocomplete#get_source_filetypes(a:filetype),
+        \ 'has_key(a:dictionary, v:val)'), 'a:dictionary[v:val]')
 endfunction"}}}
 
 function! neocomplete#helper#get_sources_list(...) "{{{
@@ -281,7 +269,8 @@ function! neocomplete#helper#get_sources_list(...) "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
   let neocomplete.sources = filter(sources, "
         \   (empty(v:val.filetypes) ||
-        \    get(v:val.filetypes, neocomplete.context_filetype, 0))")
+        \    !empty(neocomplete#helper#ftdictionary2list(
+        \      v:val.filetypes, neocomplete.context_filetype)))")
   let neocomplete.sources_filetype = neocomplete.context_filetype
 
   return neocomplete.sources
@@ -329,7 +318,6 @@ endfunction"}}}
 
 function! neocomplete#helper#call_filters(filters, source, context) "{{{
   let context = extend(a:source.neocomplete__context, a:context)
-  let _ = []
   for filter in a:filters
     try
       let context.candidates = call(filter.filter, [context], filter)
@@ -367,6 +355,18 @@ endfunction"}}}
 
 function! neocomplete#helper#check_invalid_omnifunc(omnifunc) "{{{
   return a:omnifunc == '' || (a:omnifunc !~ '#' && !exists('*' . a:omnifunc))
+endfunction"}}}
+
+function! neocomplete#helper#indent_current_line() "{{{
+  let pos = getpos('.')
+  let equalprg = &l:equalprg
+  try
+    setlocal equalprg=
+    silent normal! ==
+  finally
+    let &l:equalprg = equalprg
+    call setpos('.', pos)
+  endtry
 endfunction"}}}
 
 let &cpo = s:save_cpo

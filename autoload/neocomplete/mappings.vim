@@ -1,7 +1,6 @@
 "=============================================================================
 " FILE: mappings.vim
 " AUTHOR: Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 11 Feb 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -75,7 +74,7 @@ endfunction
 function! neocomplete#mappings#popup_post() "{{{
   return  !pumvisible() ? "" :
         \ g:neocomplete#enable_auto_select ? "\<C-p>\<Down>" :
-        \ "\<C-p>"
+        \ neocomplete#is_auto_complete() ? "\<C-p>" : ""
 endfunction"}}}
 
 function! neocomplete#mappings#undo_completion() "{{{
@@ -86,8 +85,8 @@ function! neocomplete#mappings#undo_completion() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
 
   " Get cursor word.
-  let [complete_pos, complete_str] =
-        \ neocomplete#helper#match_word(neocomplete#get_cur_text(1))
+  let complete_str =
+        \ neocomplete#helper#match_word(neocomplete#get_cur_text(1))[1]
   let old_keyword_str = neocomplete.complete_str
   let neocomplete.complete_str = complete_str
 
@@ -101,34 +100,40 @@ function! neocomplete#mappings#complete_common_string() "{{{
     return ''
   endif
 
-  " Save options.
-  let ignorecase_save = &ignorecase
-
   " Get cursor word.
   let neocomplete = neocomplete#get_current_neocomplete()
   let neocomplete.event = 'mapping'
-  let [complete_pos, complete_str] =
-        \ neocomplete#helper#match_word(neocomplete#get_cur_text(1))
+  let complete_str =
+        \ neocomplete#helper#match_word(neocomplete#get_cur_text(1))[1]
   let neocomplete.event = ''
 
-  if neocomplete#is_text_mode()
-    let &ignorecase = 1
-  elseif g:neocomplete#enable_smart_case || g:neocomplete#enable_camel_case
-    let &ignorecase = complete_str !~ '\u'
-  else
-    let &ignorecase = g:neocomplete#enable_ignore_case
-  endif
-
-  let candidates = neocomplete#filters#matcher_head#define().filter(
-        \ { 'candidates' : copy(neocomplete.candidates),
-        \   'complete_str' : complete_str})
-
-  if empty(candidates)
+  if complete_str == ''
     return ''
   endif
 
-  let common_str = candidates[0].word
+  " Save options.
+  let ignorecase_save = &ignorecase
+
   try
+    if neocomplete#is_text_mode()
+      let &ignorecase = 1
+    elseif g:neocomplete#enable_smart_case
+          \ || g:neocomplete#enable_camel_case
+      let &ignorecase = complete_str !~ '\u'
+    else
+      let &ignorecase = g:neocomplete#enable_ignore_case
+    endif
+
+    let candidates = neocomplete#filters#matcher_head#define().filter(
+          \ { 'candidates' : copy(neocomplete.candidates),
+          \   'complete_str' : complete_str})
+
+    if empty(candidates)
+      let &ignorecase = ignorecase_save
+      return ''
+    endif
+
+    let common_str = candidates[0].word
     for keyword in candidates[1:]
       while !neocomplete#head_match(keyword.word, common_str)
         let common_str = common_str[: -2]
@@ -143,6 +148,8 @@ function! neocomplete#mappings#complete_common_string() "{{{
   endtry
 
   if common_str == ''
+        \ || complete_str ==? common_str
+        \ || len(common_str) == len(candidates[0].word)
     return ''
   endif
 
@@ -165,27 +172,13 @@ function! neocomplete#mappings#start_manual_complete(...) "{{{
         \ keys(neocomplete#available_sources()))
   let neocomplete.manual_sources = neocomplete#helper#get_sources_list(
         \ neocomplete#util#convert2list(sources))
+  let neocomplete.sources_filetype = ''
 
   " Set function.
   let &l:completefunc = 'neocomplete#complete#sources_manual_complete'
 
   " Start complete.
-  return "\<C-x>\<C-u>\<C-p>"
-        \ . (g:neocomplete#enable_auto_select ? "\<Down>" : "")
-endfunction"}}}
-
-function! neocomplete#mappings#start_manual_complete_list(complete_pos, complete_str, candidates) "{{{
-  let neocomplete = neocomplete#get_current_neocomplete()
-  let [neocomplete.complete_pos,
-        \ neocomplete.complete_str, neocomplete.candidates] =
-        \ [a:complete_pos, a:complete_str, a:candidates]
-
-  " Set function.
-  let &l:completefunc = 'neocomplete#complete#auto_complete'
-
-  " Start complete.
-  return "\<C-x>\<C-u>\<C-p>"
-        \ . (g:neocomplete#enable_auto_select ? "\<Down>" : "")
+  return "\<C-x>\<C-u>\<C-r>=neocomplete#mappings#popup_post()\<CR>"
 endfunction"}}}
 
 let &cpo = s:save_cpo

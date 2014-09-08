@@ -1,7 +1,6 @@
 "=============================================================================
 " FILE: helper.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 11 Jan 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -605,6 +604,17 @@ function! s:make_cache_features() "{{{
             \ })
     endif
   endfor
+
+  call add(features, {
+        \ 'word' : 'patch',
+        \ 'menu' : '; Included patches Ex: patch123',
+        \ })
+  if has('patch-7.4.237')
+    call add(features, {
+          \ 'word' : 'patch-',
+          \ 'menu' : '; Version and patches Ex: patch-7.4.237'
+          \ })
+  endif
 
   return features
 endfunction"}}}

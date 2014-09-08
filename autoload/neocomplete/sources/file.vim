@@ -1,7 +1,6 @@
 "=============================================================================
 " FILE: file.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 22 Jan 2014.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -71,8 +70,8 @@ endfunction"}}}
 
 function! s:source.gather_candidates(context) "{{{
   let pattern = neocomplete#get_keyword_pattern_end('filename', self.name)
-  let [complete_pos, complete_str] =
-        \ neocomplete#helper#match_word(a:context.input, pattern)
+  let complete_str =
+        \ neocomplete#helper#match_word(a:context.input, pattern)[1]
   if neocomplete#is_windows() && complete_str =~ '^[\\/]'
     return []
   endif
@@ -90,6 +89,9 @@ function! s:get_glob_files(complete_str, path) "{{{
   let complete_str = neocomplete#util#substitute_path_separator(
         \ substitute(a:complete_str, '\\\(.\)', '\1', 'g'))
   let complete_str = substitute(complete_str, '[^/.]\+$', '', '')
+
+  " Note: Support ${env}
+  let complete_str = substitute(complete_str, '\${\(\w\+\)}', '$\1', 'g')
 
   let glob = (complete_str !~ '\*$')?
         \ complete_str . '*' : complete_str

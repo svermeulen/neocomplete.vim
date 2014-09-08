@@ -19,7 +19,7 @@ See [requirements](#requirements) if you aren't sure whether you have this.
 
 ## Requirements
 
-neocomplete requires Vim 7.3.885+ compiled with [if\_lua](http://vimdoc.sourceforge.net/htmldoc/if_lua.html). 
+neocomplete requires Vim 7.3.885+ compiled with [if\_lua](http://vimdoc.sourceforge.net/htmldoc/if_lua.html).
 If `:echo has("lua")` returns `1`, then you're done; otherwise, see below.
 
 ### Vim builds for Windows
@@ -47,15 +47,49 @@ To install Vim (as opposed to MacVim) with homebrew:
 
 ### Vim for Linux:
 
-On Linux, your distribution's package manager may have a fairly outdated
+#### Debian (or Ubuntu) 
+
+Make sure you have any of these packages:
+* vim-nox
+* vim-gtk
+* vim-gnome
+* vim-athena
+
+Which package depends on your graphical environment (except vim-nox which is for vim with no GUI).
+
+#### Fedora 
+
+The latest version of vim includes lua.
+As of 2014-04-16 you need to (download the rpm)[http://koji.fedoraproject.org/koji/packageinfo?packageID=216].
+
+#### Misc
+
+Be aware, your distribution's package manager may have a fairly outdated
 Vim build (for example, Ubuntu 12.04 ships Vim 7.3.429).
 However, [building Vim](http://vim.wikia.com/wiki/Building_Vim) on Linux is not difficult.
 Remember to specify `--with-lua` (or `--with-features=huge`).
 
+### Vim for Cygwin:
+
+In a cygwin environment, Lua interface is supported by default.
+
+If you want to make manually, you also need gcc and make.
+
+When everything is prepared, execute these commands.
+
+    cd /usr/src
+    tar jxf vim-7.4.tar.bz2
+    tar xvfz lua-5.1.5.tar.gz
+    cd /vim74/
+    ./configure --enable-luainterp --enable-gui=no \
+    --without-x --enable-multibyte --prefix=/usr
+    make && make install
+
+To check if everything was successfull enter the following `vim --version`. You should see ` +lua` in the list of features.
 
 ## Snippets
 
-The Snippets feature of neocomplcache was split into a 
+The Snippets feature of neocomplete was split into a 
 [separate plugin](https://github.com/Shougo/neosnippet).
 
 A migration guide for existing users of neocomplcache is available: 
