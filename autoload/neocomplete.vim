@@ -51,8 +51,6 @@ let g:neocomplete#disable_auto_complete =
       \ get(g:, 'neocomplete#disable_auto_complete', 0)
 let g:neocomplete#enable_fuzzy_completion =
       \ get(g:, 'neocomplete#enable_fuzzy_completion', 1)
-let g:neocomplete#enable_refresh_always =
-      \ get(g:, 'neocomplete#enable_refresh_always', 0)
 let g:neocomplete#enable_insert_char_pre =
       \ get(g:, 'neocomplete#enable_insert_char_pre', 0)
 let g:neocomplete#enable_cursor_hold_i =
@@ -65,21 +63,16 @@ let g:neocomplete#enable_auto_delimiter =
       \ get(g:, 'neocomplete#enable_auto_delimiter', 0)
 let g:neocomplete#lock_buffer_name_pattern =
       \ get(g:, 'neocomplete#lock_buffer_name_pattern', '')
-let g:neocomplete#ctags_command =
-      \ get(g:, 'neocomplete#ctags_command', 'ctags')
-let g:neocomplete#force_overwrite_completefunc =
-      \ get(g:, 'neocomplete#force_overwrite_completefunc', 0)
-let g:neocomplete#enable_prefetch =
-      \ get(g:, 'neocomplete#enable_prefetch',
-      \  has('gui_running') && has('xim'))
 let g:neocomplete#lock_iminsert =
       \ get(g:, 'neocomplete#lock_iminsert', 0)
+let g:neocomplete#enable_multibyte_completion =
+      \ get(g:, 'neocomplete#enable_multibyte_completion', 0)
 let g:neocomplete#release_cache_time =
       \ get(g:, 'neocomplete#release_cache_time', 900)
 let g:neocomplete#skip_auto_completion_time =
       \ get(g:, 'neocomplete#skip_auto_completion_time', '0.3')
 let g:neocomplete#enable_auto_close_preview =
-      \ get(g:, 'neocomplete#enable_auto_close_preview', 1)
+      \ get(g:, 'neocomplete#enable_auto_close_preview', 0)
 let g:neocomplete#fallback_mappings =
       \ get(g:, 'neocomplete#fallback_mappings', [])
 let g:neocomplete#sources =
@@ -90,8 +83,6 @@ let g:neocomplete#same_filetypes =
       \ get(g:, 'neocomplete#same_filetypes', {})
 let g:neocomplete#delimiter_patterns =
       \ get(g:, 'neocomplete#delimiter_patterns', {})
-let g:neocomplete#ctags_arguments =
-      \ get(g:, 'neocomplete#ctags_arguments', {})
 let g:neocomplete#text_mode_filetypes =
       \ get(g:, 'neocomplete#text_mode_filetypes', {})
 let g:neocomplete#tags_filter_patterns =
@@ -190,6 +181,7 @@ function! neocomplete#is_enabled() "{{{
 endfunction"}}}
 function! neocomplete#is_locked(...) "{{{
   return neocomplete#is_cache_disabled() || &paste
+        \ || (&t_Co != '' && &t_Co < 8)
         \ || g:neocomplete#disable_auto_complete
 endfunction"}}}
 function! neocomplete#is_cache_disabled() "{{{
@@ -205,10 +197,8 @@ function! neocomplete#is_auto_select() "{{{
   return g:neocomplete#enable_auto_select && !neocomplete#is_eskk_enabled()
 endfunction"}}}
 function! neocomplete#is_auto_complete() "{{{
-  return &l:completefunc == 'neocomplete#complete#auto_complete'
-endfunction"}}}
-function! neocomplete#is_sources_complete() "{{{
-  return &l:completefunc == 'neocomplete#complete#sources_manual_complete'
+  let neocomplete = neocomplete#get_current_neocomplete()
+  return neocomplete.is_auto_complete
 endfunction"}}}
 function! neocomplete#is_eskk_enabled() "{{{
   return exists('*eskk#is_enabled') && eskk#is_enabled()
@@ -220,7 +210,8 @@ function! neocomplete#is_eskk_convertion(cur_text) "{{{
 endfunction"}}}
 function! neocomplete#is_multibyte_input(cur_text) "{{{
   return (exists('b:skk_on') && b:skk_on)
-        \     || char2nr(split(a:cur_text, '\zs')[-1]) > 0x80
+        \   || (!g:neocomplete#enable_multibyte_completion
+        \         && char2nr(split(a:cur_text, '\zs')[-1]) > 0x80)
 endfunction"}}}
 function! neocomplete#is_text_mode() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
@@ -231,9 +222,7 @@ function! neocomplete#is_windows() "{{{
   return neocomplete#util#is_windows()
 endfunction"}}}
 function! neocomplete#is_prefetch() "{{{
-  return !neocomplete#is_locked() && !g:neocomplete#enable_cursor_hold_i &&
-        \ (g:neocomplete#enable_prefetch || &l:formatoptions =~# 'a'
-        \  || !empty(g:neocomplete#fallback_mappings))
+  return 1
 endfunction"}}}
 function! neocomplete#exists_echodoc() "{{{
   return exists('g:loaded_echodoc') && g:loaded_echodoc
@@ -242,10 +231,10 @@ function! neocomplete#within_comment() "{{{
   return neocomplete#get_current_neocomplete().within_comment
 endfunction"}}}
 function! neocomplete#print_error(string) "{{{
-  echohl Error | echomsg a:string | echohl None
+  echohl Error | echomsg '[neocomplete] ' . a:string | echohl None
 endfunction"}}}
 function! neocomplete#print_warning(string) "{{{
-  echohl WarningMsg | echomsg a:string | echohl None
+  echohl WarningMsg | echomsg '[neocomplete] ' . a:string | echohl None
 endfunction"}}}
 function! neocomplete#head_match(checkstr, headstr) "{{{
   let checkstr = &ignorecase ?
@@ -318,6 +307,15 @@ endfunction"}}}
 function! neocomplete#skip_next_complete() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
   let neocomplete.skip_next_complete = 1
+endfunction"}}}
+function! neocomplete#get_default_matchers() "{{{
+  return map(copy(neocomplete#get_current_neocomplete().default_matchers),
+        \ 'v:val.name')
+endfunction"}}}
+function! neocomplete#set_default_matchers(matchers) "{{{
+  let neocomplete = neocomplete#get_current_neocomplete()
+  let neocomplete.default_matchers = neocomplete#init#_filters(
+        \ neocomplete#util#convert2list(a:matchers))
 endfunction"}}}
 
 function! neocomplete#set_dictionary_helper(variable, keys, value) "{{{

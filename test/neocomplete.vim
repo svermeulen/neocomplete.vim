@@ -1,3 +1,4 @@
+
 let s:suite = themis#suite('parser')
 let s:assert = themis#helper('assert')
 
@@ -50,6 +51,8 @@ function! s:suite.overlap()
         \length('foob', 'baz'), 1)
   call s:assert.equals(neocomplete#filters#converter_remove_overlap#
         \length('foobar', 'foobar'), 6)
+  call s:assert.equals(neocomplete#filters#converter_remove_overlap#
+        \length('тест', 'ст'), len('ст'))
 endfunction
 
 " vim:foldmethod=marker:fen:

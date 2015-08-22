@@ -31,28 +31,77 @@ function! neocomplete#mappings#define_default_mappings() "{{{
         \ unite#sources#neocomplete#start_complete()
   inoremap <expr><silent> <Plug>(neocomplete_start_unite_quick_match)
         \ unite#sources#neocomplete#start_quick_match()
-  inoremap <silent> <Plug>(neocomplete_start_omni_complete)
-        \ <C-x><C-o><C-p>
+  if neocomplete#util#is_complete_select()
+    inoremap <silent> <Plug>(neocomplete_start_omni_complete)
+          \ <C-x><C-o>
+  else
+    inoremap <silent> <Plug>(neocomplete_start_omni_complete)
+          \ <C-x><C-o><C-p>
+  endif
   if neocomplete#util#is_complete_select()
     inoremap <silent> <Plug>(neocomplete_start_auto_complete)
-          \ <C-x><C-u>
+          \ <C-r>=neocomplete#mappings#auto_complete()<CR>
+    inoremap <silent> <Plug>(neocomplete_start_manual_complete)
+          \ <C-r>=neocomplete#mappings#manual_complete()<CR>
   else
     inoremap <silent> <Plug>(neocomplete_start_auto_complete)
-          \ <C-x><C-u><C-r>=neocomplete#mappings#popup_post()<CR>
+          \ <C-r>=neocomplete#mappings#auto_complete()<CR><C-r>=
+          \neocomplete#mappings#popup_post()<CR>
+    inoremap <silent> <Plug>(neocomplete_start_manual_complete)
+          \ <C-r>=neocomplete#mappings#manual_complete()<CR><C-r>=
+          \neocomplete#mappings#popup_post()<CR>
+  endif
+
+  if !has('patch-7.4.653')
+    " To prevent Vim's complete() bug.
+    if mapcheck('<C-h>', 'i') ==# ''
+      inoremap <expr><C-h> neocomplete#smart_close_popup()."\<C-h>"
+    endif
+    if mapcheck('<BS>', 'i') ==# ''
+      inoremap <expr><BS> neocomplete#smart_close_popup()."\<C-h>"
+    endif
   endif
 endfunction"}}}
 
-function! neocomplete#mappings#smart_close_popup() "{{{
-  let key = g:neocomplete#enable_auto_select ?
-        \ neocomplete#mappings#cancel_popup() :
-        \ neocomplete#mappings#close_popup()
-
-  " Don't skip next complete.
+function! neocomplete#mappings#auto_complete() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
-  let neocomplete.skip_next_complete = 0
-  let neocomplete.old_linenr = 0
+  let cur_text = neocomplete#get_cur_text(1)
+  let complete_pos =
+        \ neocomplete#complete#_get_complete_pos(
+        \ neocomplete.complete_sources)
+  let base = cur_text[complete_pos :]
 
-  return key
+  let neocomplete.candidates = neocomplete#complete#_get_words(
+        \ neocomplete.complete_sources, complete_pos, base)
+  let neocomplete.complete_str = base
+
+  " Start auto complete.
+  call complete(complete_pos+1, neocomplete.candidates)
+  return ''
+endfunction"}}}
+
+function! neocomplete#mappings#manual_complete() "{{{
+  let neocomplete = neocomplete#get_current_neocomplete()
+  let cur_text = neocomplete#get_cur_text(1)
+  let complete_sources = neocomplete#complete#_get_results(
+        \ cur_text, neocomplete.manual_sources)
+  let complete_pos =
+        \ neocomplete#complete#_get_complete_pos(
+        \ complete_sources)
+  let base = cur_text[complete_pos :]
+
+  let neocomplete.complete_pos = complete_pos
+  let neocomplete.candidates = neocomplete#complete#_get_words(
+        \ complete_sources, complete_pos, base)
+  let neocomplete.complete_str = base
+
+  " Start auto complete.
+  call complete(complete_pos+1, neocomplete.candidates)
+  return ''
+endfunction"}}}
+
+function! neocomplete#mappings#smart_close_popup() "{{{
+  return neocomplete#mappings#cancel_popup()
 endfunction
 "}}}
 function! neocomplete#mappings#close_popup() "{{{
@@ -65,6 +114,7 @@ endfunction
 "}}}
 function! neocomplete#mappings#cancel_popup() "{{{
   let neocomplete = neocomplete#get_current_neocomplete()
+  let neocomplete.complete_str = ''
   let neocomplete.skip_next_complete = 1
 
   return pumvisible() ? "\<C-e>" : ''
@@ -73,8 +123,7 @@ endfunction
 
 function! neocomplete#mappings#popup_post() "{{{
   return  !pumvisible() ? "" :
-        \ g:neocomplete#enable_auto_select ? "\<C-p>\<Down>" :
-        \ neocomplete#is_auto_complete() ? "\<C-p>" : ""
+        \ g:neocomplete#enable_auto_select ? "\<C-p>\<Down>" : "\<C-p>"
 endfunction"}}}
 
 function! neocomplete#mappings#undo_completion() "{{{
@@ -159,10 +208,10 @@ endfunction"}}}
 
 function! neocomplete#mappings#fallback(i) "{{{
   let mapping = g:neocomplete#fallback_mappings[a:i]
-  return  pumvisible()
-        \ || (mapping ==? "\<C-x>\<C-o>" && &l:omnifunc == '') ? "" :
-        \   mapping . (g:neocomplete#enable_auto_select ?
-        \            "\<C-p>\<Down>" : "\<C-p>")
+  return  (pumvisible() || (mapping ==? "\<C-x>\<C-o>"
+        \                   && &l:omnifunc == '')) ? "" :
+        \ (mapping . (neocomplete#util#is_complete_select() ?
+        \             "" : "\<C-p>"))
 endfunction"}}}
 
 " Manual complete wrapper.
@@ -171,7 +220,8 @@ function! neocomplete#mappings#start_manual_complete(...) "{{{
     return ''
   endif
 
-  if neocomplete#helper#is_omni(neocomplete#get_cur_text(1))
+  if neocomplete#helper#get_force_omni_complete_pos(
+        \ neocomplete#get_cur_text(1)) >= 0
     return "\<C-x>\<C-o>"
   endif
 
@@ -188,11 +238,10 @@ function! neocomplete#mappings#start_manual_complete(...) "{{{
 
   call neocomplete#helper#complete_configure()
 
-  " Set function.
-  let &l:completefunc = 'neocomplete#complete#sources_manual_complete'
-
   " Start complete.
-  return "\<C-x>\<C-u>"
+  return "\<C-r>=neocomplete#mappings#manual_complete()\<CR>"
+        \ . (neocomplete#util#is_complete_select() ?
+        \    "" : "\<C-r>=neocomplete#mappings#popup_post()\<CR>")
 endfunction"}}}
 
 let &cpo = s:save_cpo
